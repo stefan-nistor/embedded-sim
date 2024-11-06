@@ -5,12 +5,15 @@
 #include <cassert>
 #include <functional>
 #include <filesystem>
+#include <format>
 #include <fstream>
 #include <memory>
+#include <numeric>
 #include <iostream>
 #include <optional>
 #include <string>
 #include <sstream>
+#include <stdexcept>
 #include <tuple>
 #include <utility>
 #include <unordered_map>
@@ -22,6 +25,7 @@
 #include <model/Register.h>
 
 namespace {
+using std::iota;
 using std::addressof;
 using std::cerr;
 using std::char_traits;
@@ -29,13 +33,16 @@ using std::construct_at;
 using std::destroy_at;
 using std::exception;
 using std::exchange;
+using std::format;
 using std::holds_alternative;
 using std::getline;
 using std::fstream;
 using std::ios;
 using std::invoke;
+using std::ignore;
 using std::nullopt;
 using std::optional;
+using std::runtime_error;
 using std::string;
 using std::stringstream;
 using std::string_view;
@@ -82,6 +89,8 @@ public:
 private:
   Instruction _instr {nullptr};
 };
+
+static_assert(sizeof(InstructionRAII) == sizeof(Instruction));
 
 auto instructionOpCount(InstructionType type) noexcept -> tuple<unsigned, unsigned> {
   switch (type) {
@@ -152,55 +161,102 @@ auto op(string_view token) -> optional<InstructionType> {
 }
 
 enum FeedResult {
+  Full,
   Accepted,
   AcceptedFinished,
-  NotFinished
 };
+
+using Reference = string;
+using Constant = unsigned;
+using Parameter = variant<Reference, Constant>;
+using Instr = tuple<InstructionType, optional<Parameter>, optional<Parameter>>;
+using Label = string;
 
 class EncodedInstruction {
 public:
-  explicit EncodedInstruction(InstructionType type) noexcept : _encoded{Instr{type, nullopt, nullopt}} {}
-  explicit EncodedInstruction(string_view sv) noexcept : _encoded{Label{sv}} {}
+  explicit EncodedInstruction(InstructionType type, unsigned idx) noexcept :
+      _idx{idx}, _encoded{Instr{type, nullopt, nullopt}} {}
+  explicit EncodedInstruction(string_view sv, unsigned refInstrIdx) noexcept :
+      _idx{refInstrIdx}, _encoded{Label{sv}} {}
 
-  auto feed(string_view sv) noexcept -> FeedResult {
-    assert(holds_alternative<Label>(_encoded) && "Unexpected parametrized label");
+  auto feed(string_view sv) -> FeedResult {
+    if (sv == ":" || sv == ";") {
+      return AcceptedFinished;
+    }
 
-//    return visit([this, sv]<typename DT>(DT&& val) {
-//      using T = std::decay_t<DT>;
-//      if constexpr (std::is_same_v<T, Label>) {
-//        assert(false && "Unexpected parametrized label");
-//        terminate();
-//      } else if constexpr (std::is_same_v<T, Instr>) {
-//        auto& [t, p0, p1] = val;
-//        auto const [minParamCount, maxParamCount] = instructionOpCount(t);
-//        if (currentParameterCount() < maxParamCount) {
-//          addParam(makeParam(sv));
-//        }
-//
-//        if (auto count = currentParameterCount() == maxParamCount) {
-//          return AcceptedFinished;
-//        } else if (count == minParamCount) {
-//          return Accepted;
-//        }
-//        return NotFinished;
-//      } else {
-//        assert(false && "Unhandled variant alternative");
-//        terminate();
-//      }
-//    });
+    assert(holds_alternative<Instr>(_encoded) && "Unexpected parametrized label");
+    auto& [t, p0, p1] = get<Instr>(_encoded);
+    auto const [minParamCount, maxParamCount] = instructionOpCount(t);
+    auto const paramCount = currentParameterCount();
+    if (paramCount == maxParamCount) {
+      return Full;
+    }
+    addParam(makeParam(sv));
+    if (paramCount == maxParamCount) {
+      return AcceptedFinished;
+    }
+
+    return Accepted;
+  }
+
+  [[nodiscard]] auto index() const noexcept {
+    return _idx;
+  }
+
+  template <typename IfInstr, typename IfLabel> [[nodiscard]]
+  decltype(auto) visit(IfInstr&& ifInstr, IfLabel&& ifLabel) noexcept {
+    return std::visit([this, ifLabel, &ifInstr]<typename DT>(DT&& val) {
+      using T = std::remove_cvref_t<DT>;
+      if constexpr (std::is_same_v<T, Instr>) {
+        auto&& [type, p0, p1] = val;
+        return invoke(ifInstr, type, std::move(p0), std::move(p1));
+      } else if constexpr (std::is_same_v<T, Label>) {
+        return invoke(ifLabel, std::move(std::forward<DT>(val)), _idx);
+      } else {
+        assert(false && "Unhandled EncodedInstruction alternative");
+        terminate();
+      }
+    }, _encoded);
   }
 
 private:
-  using Reference = string;
-  using Constant = unsigned;
-  using Parameter = variant<Reference, Constant>;
-  using Instr = tuple<InstructionType, optional<Parameter>, optional<Parameter>>;
+  static auto makeConstantParam(string_view sv) -> Constant {
+    if (sv == "0") {
+      return 0;
+    }
 
-  static auto makeParam(string_view sv) -> Parameter {
+    char* end = nullptr;
+    auto value = [sv, &end]() {
+      if (sv.front() == '0') {
+        if (sv[1] == 'b' || sv[1] == 'B') {
+          return strtol(sv.data() + 2, &end, 2);
+        } else if (sv[1] == 'x' || sv[1] == 'X') {
+          return strtol(sv.data() + 2, &end, 16);
+        } else {
+          return strtol(sv.data() + 2, &end, 8);
+        }
+      }
+      return strtol(sv.data(), &end, 10);
+    }();
 
+    if (end < sv.data() + sv.length()) {
+      throw runtime_error(format("Invalid token: '{}'", sv));
+    }
+    return value;
   }
 
-  auto currentParameterCount() const -> unsigned {
+  static auto makeReferenceParam(string_view sv) -> Reference {
+    return Reference{sv};
+  }
+
+  static auto makeParam(string_view sv) -> Parameter {
+    if ('0' <= sv[0] && sv[0] <= '9') {
+      return makeConstantParam(sv);
+    }
+    return makeReferenceParam(sv);
+  }
+
+  [[nodiscard]] auto currentParameterCount() const -> unsigned {
     assert(holds_alternative<Instr>(_encoded) && "Invalid instruction encoding");
     auto const& [_, p0, p1] = get<Instr>(_encoded);
     if (p0 && p1) {
@@ -212,7 +268,7 @@ private:
     return 0;
   }
 
-  auto addParam(Parameter p) -> void {
+  auto addParam(Parameter const& p) -> void {
     assert(holds_alternative<Instr>(_encoded) && "Invalid instruction encoding");
     auto& [_, p0, p1] = get<Instr>(_encoded);
     if (!p0) {
@@ -222,45 +278,43 @@ private:
     }
   }
 
-  using Label = string;
-
   variant<Label, Instr> _encoded;
+  unsigned _idx;
 };
 
 class Tokenizer {
 public:
-  auto feed(string_view token) noexcept -> optional<EncodedInstruction> {
+  auto feed(string_view token) -> optional<EncodedInstruction> {
     if (_lineComment || !_current && token == "//") {
       _lineComment = true;
       return nullopt;
     }
 
-    if (!_current) {
-      if (auto const opToken = op(token)) {
-        _current.emplace(*opToken);
-      } else {
-        return EncodedInstruction{token};
-      }
-    } else {
-      auto fed = _current->feed(token);
-      if (!fed) {
-        auto extracted =
-      }
-      auto currentInstr = *_current;
-      if (currentInstr.feed(token)) {
-
-      }
+    if (token == ",") {
+      return nullopt;
     }
 
-
-    else if (_current->feed(token)) {
-      return std::move(*_current);
-      _current.reset();
+    if (!_current) {
+      if (auto const opToken = op(token)) {
+        _current.emplace(*opToken, ++_instructionIndex);
+      } else {
+        return EncodedInstruction{token, _instructionIndex};
+      }
     } else {
-      auto current = std::move(*_current);
-      _current.reset();
-      _current = feed(token);
-      return current;
+      auto res = _current->feed(token);
+      switch (res) {
+        case AcceptedFinished:
+        case Full: {
+          auto finished = std::move(*_current);
+          _current.reset();
+          if (res == Full) {
+            ignore = feed(token);
+          }
+          return finished;
+        }
+        case Accepted:
+          return nullopt;
+      }
     }
 
     return nullopt;
@@ -270,9 +324,14 @@ public:
     _lineComment = false;
   }
 
+  auto anyRemaining() noexcept -> optional<EncodedInstruction> {
+    return _current;
+  }
+
 private:
-  bool _lineComment;
-  optional<EncodedInstruction> _current;
+  bool _lineComment {false};
+  unsigned _instructionIndex {0};
+  optional<EncodedInstruction> _current {nullopt};
 };
 
 template <typename T> auto revive(T&& object) {
@@ -280,9 +339,21 @@ template <typename T> auto revive(T&& object) {
   construct_at(addressof(object));
 }
 
+auto sanitize(string_view sv) {
+  if (sv.empty()) {
+    return sv;
+  }
+  if (sv.back() == ';') {
+    return sv.substr(0, sv.length() - 1);
+  }
+  return sv;
+}
+
 class CxxParser {
 public:
-  explicit CxxParser(string&& code) noexcept : _code{std::move(code)} {
+  explicit CxxParser(string&& code) : _code{std::move(code)} {
+    _possibleConstants.resize(std::numeric_limits<Register>::max());
+    std::iota(_possibleConstants.begin(), _possibleConstants.end(), 0);
     Tokenizer tokenizer;
     string line;
     while (getline(_code, line)) {
@@ -291,17 +362,77 @@ public:
       revive(line);
       string token;
       while (lineBuf >> token) {
-        if (auto const maybeInstruction = tokenizer.feed(token)) {
-          _instructions.push_back(std::move(*maybeInstruction));
+        auto const sanitized = sanitize(token);
+        if (auto maybeInstruction = tokenizer.feed(sanitized)) {
+          _encodedInstructions.push_back(std::move(*maybeInstruction));
         }
       }
     }
+
+    if (auto maybeInstruction = tokenizer.anyRemaining()) {
+      _encodedInstructions.push_back(std::move(*maybeInstruction));
+    }
+  }
+
+  auto makeInstructionSet(/* CPU */) noexcept -> vector<InstructionRAII> const& {
+    // TODO: associate _cachedInstructions with CPU to regenerate for different received map
+
+    if (_cachedInstructions) {
+      return *_cachedInstructions;
+    }
+
+    _cachedInstructions.emplace();
+    _cachedInstructions->reserve(_encodedInstructions.size());
+    unordered_map<string_view, unsigned> jumpMap;
+    for (auto& encoded : _encodedInstructions) {
+      encoded.visit(
+          [](auto&&...) {},
+          [&jumpMap, this](auto const& label, unsigned instrRefIdx) {
+            jumpMap.emplace(label, instrRefIdx);
+          }
+      );
+    }
+
+    for (auto&& encoded : std::move(_encodedInstructions)) {
+      encoded.visit(
+          [this, &jumpMap](InstructionType type, optional<Parameter>&& p0, optional<Parameter>&& p1) {
+            auto paramVisitor = [this, &jumpMap](optional<Parameter>&& p) -> Register* {
+              if (!p) {
+                return nullptr;
+              }
+
+              return std::visit([this, &jumpMap]<typename DT>(DT&& val) -> Register* {
+                using T = std::remove_cvref_t<DT>;
+                if constexpr (std::is_same_v<T, Reference>) {
+                  if (auto jumpAt = jumpMap.find(val); jumpAt != jumpMap.end()) {
+                    return _possibleConstants.data() + jumpAt->second;
+                  } else {
+                    // Register reference, identify in CPU, or unmapped/invalid reference
+                    return nullptr;
+                  }
+                } else if constexpr (std::is_same_v<T, Constant>) {
+                  return _possibleConstants.data() + val;
+                } else {
+                  assert(false && "Unhandled Parameter type");
+                  return nullptr;
+                }
+              }, std::move(*p));
+            };
+            _cachedInstructions->emplace_back(type, paramVisitor(std::move(p0)), paramVisitor(std::move(p1)));
+          },
+          [](auto&&...) {}
+      );
+    }
+
+    _cachedInstructions->shrink_to_fit();
+    return *_cachedInstructions;
   }
 
 private:
   stringstream _code;
-  unordered_map<string, EncodedInstruction const*> _jumpMap;
-  vector<EncodedInstruction> _instructions;
+  vector<EncodedInstruction> _encodedInstructions;
+  optional<vector<InstructionRAII>> _cachedInstructions;
+  vector<Register> _possibleConstants;
 };
 
 template <typename Callable> decltype(auto) catchAll(Callable&& callable) noexcept {
@@ -348,7 +479,17 @@ Parser Parser_fromSizedCode(size_t length, char const* code) {
   return catchAll([length, code]() { return new Parser_Handle{.parser{string{code, length}}}; });
 }
 
-void Parser_dtor(Parser parser) {
+void Parser_destruct(Parser parser) {
   delete parser;
+}
+
+U16 Parser_getInstructionSet(Parser parser, Instruction const** ppInstructionList /*, CPUMap? */) {
+  auto const& instructions = parser->parser.makeInstructionSet();
+  if (ppInstructionList) {
+    static_assert(sizeof(InstructionRAII) == sizeof(Instruction));
+    static_assert(sizeof(instructions[0]) == sizeof(Instruction));
+    *ppInstructionList = static_cast<Instruction const*>(static_cast<void const*>(instructions.data()));
+  }
+  return static_cast<U16>(instructions.size());
 }
 }

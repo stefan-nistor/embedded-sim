@@ -17,6 +17,7 @@ template <Callable<ALU&, Register&, Register&> C> auto aluTest(C&& callable) {
   Register ovf = 0;
   auto alu = ALU_ctor(&flg, &ovf);
   std::invoke(std::forward<C>(callable), alu, flg, ovf);
+  ALU_dtor(alu);
 }
 }
 
