@@ -11,6 +11,7 @@
 #define NULL ((void*)(0))
 #endif
 #define CPU_DATA_REGISTRY_LIST_SIZE (8)
+#define MAX_INSTR_LIST_SIZE (1024)
 
 ////////////////////////////
 ///  FR = Flag Register  ///
