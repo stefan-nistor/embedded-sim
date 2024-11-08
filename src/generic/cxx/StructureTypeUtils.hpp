@@ -8,8 +8,13 @@
 
 namespace cxx {
 template <StructureType type> struct FindStructureTypeResultImpl {};
+
 template <> struct FindStructureTypeResultImpl<STRUCTURE_TYPE_PARSER_INVALID_TOKEN_OUTPUT_INFO> {
   using Type = ParserInvalidTokenOutputInfo;
+};
+
+template <> struct FindStructureTypeResultImpl<STRUCTURE_TYPE_PARSER_UNDEFINED_REFERENCE_OUTPUT_INFO> {
+  using Type = ParserUndefinedReferenceOutputInfo;
 };
 
 template <StructureType type> using FindStructureTypeResult = typename FindStructureTypeResultImpl<type>::Type;

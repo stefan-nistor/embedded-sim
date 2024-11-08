@@ -5,12 +5,14 @@
 #pragma once
 
 #include <iostream>
+#include <optional>
 #include <variant>
 #include <vector>
 
 #include <generic/cxx/RAII.hpp>
 
 namespace testing::mock::detail {
+using std::apply;
 using std::cout;
 using std::equal;
 using std::holds_alternative;
@@ -26,6 +28,7 @@ enum class ParameterMatchResult {
   ParamEqual,
   NullParamMismatch,
   ValueMismatch,
+  RegisterMismatch,
 };
 
 enum class InstructionMatchResult {
@@ -35,7 +38,7 @@ enum class InstructionMatchResult {
   P1Mismatch,
 };
 
-using ParameterMatcherTypes = variant<int, nullptr_t>;
+using ParameterMatcherTypes = variant<int, nullptr_t, Register const*>;
 
 template <typename T> struct WithWildcardImpl;
 template <typename...Ts> struct WithWildcardImpl<variant<Ts...>> {
@@ -81,6 +84,10 @@ public:
       return ValueMismatch;
     }
 
+    if (holds_alternative<Register const*>(*_param) && param != get<Register const*>(*_param)) {
+      return RegisterMismatch;
+    }
+
     return ParamEqual;
   }
 
@@ -92,6 +99,10 @@ public:
         return "null";
       } else if constexpr(std::is_same_v<int, T>) {
         return std::to_string(val);
+      } else if constexpr(std::is_same_v<Register const*, T>) {
+        std::stringstream oss;
+        oss << *val << " (" << "0x" << std::hex << std::bit_cast<std::size_t>(val) << ")";
+        return oss.str();
       } else {
         assert(false && "Unhandled ParameterMatcher str alternative");
       }
@@ -154,6 +165,12 @@ public:
     _matchers.emplace_back();
   }
 
+  template <typename... Ts> auto push(tuple<Ts...>&& tArgs) {
+    apply([this](Ts&&... args) {
+      _matchers.emplace_back(Wildcard{}, std::forward<Ts>(args)...);
+    }, std::move(tArgs));
+  }
+
 private:
   vector<InstructionMatcher> _matchers;
 };
@@ -166,6 +183,10 @@ template <typename... A> auto instructions(A&&... args) -> InstructionMatcherSet
 
 auto any() {
   return Wildcard{};
+}
+
+template <typename... A> auto any(A&&... args) {
+  return std::forward_as_tuple(args...);
 }
 
 template <typename... A> auto instr(A&&... args) {
@@ -190,6 +211,10 @@ template <typename... A> auto mul(A&&... args) {
 
 template <typename... A> auto jmp(A&&... args) {
   return instr(IPU_JMP, std::forward<A>(args)...);
+}
+
+template <typename... A> auto pop(A&&... args) {
+  return instr(MMU_POP, std::forward<A>(args)...);
 }
 
 auto str(InstructionType type) {
@@ -232,7 +257,9 @@ auto str(Register const* r) -> std::string {
     return "null";
   }
 
-  return std::to_string(*r);
+  std::stringstream oss;
+  oss << *r << " (0x" << std::hex << std::bit_cast<std::size_t>(r) << ")";
+  return oss.str();
 }
 
 auto operator==(InstructionMatcherSet const& instructionSet, vector<Instruction> const& instructions) {
@@ -292,5 +319,6 @@ using detail::any;
 using detail::jmp;
 using detail::mov;
 using detail::mul;
+using detail::pop;
 using detail::sub;
 } // namespace testing::mock

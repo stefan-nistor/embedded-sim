@@ -5,9 +5,11 @@
 #include <gtest/gtest.h>
 #include <parser/parser.h>
 
+#include "CPUMock.hpp"
 #include "InstructionMock.hpp"
 
 namespace {
+using std::ignore;
 using std::string_view;
 using std::vector;
 
@@ -18,6 +20,8 @@ template <typename Fn, typename... Args> concept Callable = std::is_invocable_v<
 class ParserException : public std::exception {
 public:
   explicit ParserException(ParserError error) : _error{error} {}
+  ParserException(std::string token, unsigned instrIdx) :
+      _token{std::move(token)}, _line{instrIdx} {}
   ParserException(std::string token, unsigned line, unsigned column) :
       _token{std::move(token)}, _line{line}, _column{column} {}
 
@@ -37,6 +41,10 @@ public:
     return _column;
   }
 
+  [[nodiscard]] auto refInstrIdx() const {
+    return _line;
+  }
+
 private:
   ParserError _error {PARSER_ERROR_NONE};
   std::string _token;
@@ -51,14 +59,25 @@ public:
 
   [[nodiscard]] auto instructions(vector<ParserMappedRegister> const& mappedRegisters) const -> vector<Instruction> {
     U16 instructionCount;
+    std::string undefReferenceBuffer(128, '\0');
+    ParserUndefinedReferenceOutputInfo undefinedReferenceInfo {
+      .structureType = STRUCTURE_TYPE_PARSER_UNDEFINED_REFERENCE_OUTPUT_INFO,
+      .pNext = nullptr,
+      .referencingInstructionIndex = 0,
+      .tokenLength = 128,
+      .pToken = undefReferenceBuffer.data()
+    };
     ParserGetInstructionSetInfo getInfo {
       .structureType = STRUCTURE_TYPE_PARSER_GET_INSTRUCTION_SET_INFO,
-      .pNext = nullptr,
+      .pNext = &undefinedReferenceInfo,
       .mappedRegisterCount = static_cast<U16>(mappedRegisters.size()),
       .pMappedRegisters = mappedRegisters.data()
     };
     if (auto const error = getParserInstructionSet(_handle, &getInfo, &instructionCount, nullptr);
-        error != PARSER_ERROR_NONE) {
+        error == PARSER_ERROR_UNDEFINED_REFERENCE) {
+      undefReferenceBuffer.resize(undefinedReferenceInfo.tokenLength);
+      throw ParserException(undefReferenceBuffer, undefinedReferenceInfo.referencingInstructionIndex);
+    } else if (error != PARSER_ERROR_NONE) {
       throw ParserException(error);
     }
 
@@ -122,8 +141,9 @@ mul r4, 3;
 )";
 
   ParserRAII parser{code};
+  MockCpuRegisterMap<> regMap{};
 
-  ASSERT_EQ(6, parser.instructions({}).size());
+  ASSERT_EQ(6, parser.instructions(regMap.map()).size());
 }
 
 TEST(ParserTest, InstructionTypesShouldBeValid) {
@@ -140,10 +160,11 @@ mul r4, 3;
 )";
 
   ParserRAII parser{code};
+  MockCpuRegisterMap<> regMap{};
 
   ASSERT_EQ(instructions(
       mov(), mov(), add(), add(), sub(), mul()
-  ), parser.instructions({}));
+  ), parser.instructions(regMap.map()));
 }
 
 TEST(ParserTest, InstructionConstantsShouldBeValid) {
@@ -160,10 +181,11 @@ mul r4, 3;
 )";
 
   ParserRAII parser{code};
+  MockCpuRegisterMap<> regMap{};
 
   ASSERT_EQ(instructions(
       mov(), mov(any(), 54), add(any(), 4), add(any(), 2), sub(any(), 0), mul(any(), 3)
-  ), parser.instructions({}));
+  ), parser.instructions(regMap.map()));
 }
 
 TEST(ParserTest, InstructionConstantInBase2ShouldBeValid) {
@@ -172,10 +194,11 @@ mov r0 0b1011;
 )";
 
   ParserRAII parser{code};
+  MockCpuRegisterMap<> regMap{};
 
   ASSERT_EQ(instructions(
       mov(any(), 0b1011)
-  ), parser.instructions({}));
+  ), parser.instructions(regMap.map()));
 }
 
 TEST(ParserTest, InstructionConstantInBase8ShouldBeValid) {
@@ -184,10 +207,11 @@ mov r0 0766;
 )";
 
   ParserRAII parser{code};
+  MockCpuRegisterMap<> regMap{};
 
   ASSERT_EQ(instructions(
       mov(any(), 0766)
-  ), parser.instructions({}));
+  ), parser.instructions(regMap.map()));
 }
 
 TEST(ParserTest, InstructionConstantInBase16ShouldBeValid) {
@@ -196,10 +220,11 @@ mov r0 0xDEAD;
 )";
 
   ParserRAII parser{code};
+  MockCpuRegisterMap<> regMap{};
 
   ASSERT_EQ(instructions(
       mov(any(), 0xDEAD)
-  ), parser.instructions({}));
+  ), parser.instructions(regMap.map()));
 }
 
 TEST(ParserTest, InstructionConstantInvalidShouldYieldError) {
@@ -222,16 +247,18 @@ mov r0 , 10;
 )";
 
   ParserRAII parser{code};
-  ASSERT_EQ(instructions(mov(any(), 10)), parser.instructions({}));
+  MockCpuRegisterMap<> regMap{};
+  ASSERT_EQ(instructions(mov(any(), 10)), parser.instructions(regMap.map()));
 }
 
 TEST(ParserTest, CommasDoNothing2) {
   auto code = R"(
-mov r0 , 10;
+mov r0, 10;
 )";
 
   ParserRAII parser{code};
-  ASSERT_EQ(instructions(mov(any(), 10)), parser.instructions({}));
+  MockCpuRegisterMap<> regMap{};
+  ASSERT_EQ(instructions(mov(any(), 10)), parser.instructions(regMap.map()));
 }
 
 TEST(ParserTest, CreateParserWithInvalidArgsYieldsError) {
@@ -366,11 +393,13 @@ TEST(ParserTest, GetInstructionSetWithInvalidArgsYieldsError) {
     .pData = R"(mov r0 r1; mov r1 r2; mov r2 r0;)"
   };
   ASSERT_EQ(PARSER_ERROR_NONE, createParser(&createInfo, &p));
+  MockCpuRegisterMap<> regMap{};
+  auto map = regMap.map();
   ParserGetInstructionSetInfo getInfo {
     .structureType = STRUCTURE_TYPE_PARSER_GET_INSTRUCTION_SET_INFO,
     .pNext = nullptr,
-    .mappedRegisterCount = 0u,
-    .pMappedRegisters = nullptr
+    .mappedRegisterCount = static_cast<U16>(map.size()),
+    .pMappedRegisters = map.data()
   };
   U16 iCount;
   Instruction ins[2];
@@ -389,11 +418,13 @@ TEST(ParserTest, GetInstructionSetWithSmallInstructionArrayYieldsError) {
     .pData = R"(mov r0 r1; mov r1 r2; mov r2 r0;)"
   };
   ASSERT_EQ(PARSER_ERROR_NONE, createParser(&createInfo, &p));
+  MockCpuRegisterMap<> regMap{};
+  auto map = regMap.map();
   ParserGetInstructionSetInfo getInfo {
     .structureType = STRUCTURE_TYPE_PARSER_GET_INSTRUCTION_SET_INFO,
     .pNext = nullptr,
-    .mappedRegisterCount = 0u,
-    .pMappedRegisters = nullptr
+    .mappedRegisterCount = static_cast<U16>(map.size()),
+    .pMappedRegisters = map.data()
   };
   U16 iCount = 2;
   Instruction ins[2]; // < 3
@@ -410,12 +441,14 @@ TEST(ParserTest, GetInstructionSetWithNoBufferYieldsRequiredSize) {
     .dataLength = 0,
     .pData = R"(mov r0 r1; mov r1 r2; mov r2 r0;)"
   };
+  MockCpuRegisterMap<> regMap{};
+  auto map = regMap.map();
   ASSERT_EQ(PARSER_ERROR_NONE, createParser(&createInfo, &p));
   ParserGetInstructionSetInfo getInfo {
     .structureType = STRUCTURE_TYPE_PARSER_GET_INSTRUCTION_SET_INFO,
     .pNext = nullptr,
-    .mappedRegisterCount = 0u,
-    .pMappedRegisters = nullptr
+    .mappedRegisterCount = static_cast<U16>(map.size()),
+    .pMappedRegisters = map.data()
   };
   U16 iCount = 2;
   ASSERT_EQ(PARSER_ERROR_NONE, getParserInstructionSet(p, &getInfo, &iCount, nullptr));
@@ -432,13 +465,14 @@ mov r2 30;
 )";
 
   ParserRAII parser{code};
+  MockCpuRegisterMap<> regMap{};
 
   ASSERT_EQ(instructions(
       mov(),
       mov(),
       jmp(),
       mov()
-  ), parser.instructions({}));
+  ), parser.instructions(regMap.map()));
 }
 
 TEST(ParserTest, JumpParseYieldsCorrectInstructionIndex) {
@@ -451,13 +485,14 @@ mov r2 30;
 )";
 
   ParserRAII parser{code};
+  MockCpuRegisterMap<> regMap{};
 
   ASSERT_EQ(instructions(
       mov(),
       mov(),
       jmp(1),
       mov()
-  ), parser.instructions({}));
+  ), parser.instructions(regMap.map()));
 }
 
 TEST(ParserTest, JumpParseHasSecondArgNull) {
@@ -470,13 +505,14 @@ mov r2 30;
 )";
 
   ParserRAII parser{code};
+  MockCpuRegisterMap<> regMap{};
 
   ASSERT_EQ(instructions(
       mov(),
       mov(),
       jmp(any(), nullptr),
       mov()
-  ), parser.instructions({}));
+  ), parser.instructions(regMap.map()));
 }
 
 TEST(ParserTest, InstructionWithTooManyParametersYieldsError) {
@@ -524,4 +560,94 @@ mov r0
     ASSERT_EQ(3, e.line());
     ASSERT_EQ(0, e.column());
   }
+}
+
+TEST(ParserTest, VariadicArgCountResultingInValidInstructions) {
+  auto code = R"(
+pop;
+pop r1;
+)";
+
+  ParserRAII parser{code};
+  MockCpuRegisterMap<> regMap{};
+
+  ASSERT_EQ(instructions(
+      pop(nullptr, nullptr),
+      pop(any(), nullptr)
+  ), parser.instructions(regMap.map()));
+}
+
+TEST(ParserTest, ImmediateInstructionTerminationOfParametrizedOneShouldYieldError) {
+  auto code = R"(
+add;
+)";
+
+  try {
+    ParserRAII parser{code};
+  } catch (ParserException const& e) {
+    ASSERT_EQ(";", e.token());
+    ASSERT_EQ(2, e.line());
+    ASSERT_EQ(4, e.column());
+  }
+}
+
+TEST(ParserTest, ReferencesResolveInsideArgsAppropriately) {
+  auto code = R"(
+mov r0 42;
+add r1 r2;
+)";
+
+  ParserRAII parser{code};
+  MockCpuRegisterMap<> regMap{};
+  auto const& regs = regMap.regs();
+
+  ASSERT_EQ(instructions(
+      any(&regs[0], any()),
+      any(&regs[1], &regs[2])
+  ), parser.instructions(regMap.map()));
+}
+
+TEST(ParserTest, UndefinedReferenceShouldYieldError) {
+  auto code = R"(
+mov r0 42;
+add r1 r2;
+)";
+
+  ParserRAII parser{code};
+  MockCpuRegisterMap<1> regMap{};
+
+  try {
+    ignore = parser.instructions(regMap.map());
+    ASSERT_FALSE(true);
+  } catch (ParserException const& e) {
+    ASSERT_EQ(1, e.refInstrIdx());
+    ASSERT_EQ("r2", e.token());
+  }
+}
+
+TEST(ParserTest, InstructionFullMatchValidation) {
+  auto code = R"(
+mov r0 r1;
+mov r1 r2;
+// abcd
+add r3 r4;
+add r3 2;
+// hah
+// hah2
+sub r2 0;
+mul r4, 3;
+)";
+
+  ParserRAII parser{code};
+  MockCpuRegisterMap<> regMap{};
+  auto const& regs = regMap.regs();
+
+  ASSERT_EQ(instructions(
+      mov(&regs[0], &regs[1]),
+      mov(&regs[1], &regs[2]),
+      add(&regs[3], &regs[4]),
+      add(&regs[3], 2),
+      sub(&regs[2], 0),
+      mul(&regs[4], 3)
+  ), parser.instructions(regMap.map()));
 }

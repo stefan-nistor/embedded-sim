@@ -14,6 +14,7 @@ typedef enum {
   PARSER_ERROR_INVALID_PATH,
   PARSER_ERROR_ARRAY_TOO_SMALL,
   PARSER_ERROR_INVALID_TOKEN,
+  PARSER_ERROR_UNDEFINED_REFERENCE,
   PARSER_ERROR_UNKNOWN,
 } ParserError;
 
@@ -38,7 +39,7 @@ typedef struct {
 
 typedef struct {
   StructureType structureType;
-  void const* pNext;
+  void* pNext;
   U16 mappedRegisterCount;
   ParserMappedRegister const* pMappedRegisters;
 } ParserGetInstructionSetInfo;
@@ -51,6 +52,14 @@ typedef struct {
   U32 tokenLength;
   char* pToken;
 } ParserInvalidTokenOutputInfo;
+
+typedef struct {
+  StructureType structureType;
+  void* pNext;
+  U32 referencingInstructionIndex;
+  U32 tokenLength;
+  char* pToken;
+} ParserUndefinedReferenceOutputInfo;
 
 DEFINE_HANDLE(Parser);
 
