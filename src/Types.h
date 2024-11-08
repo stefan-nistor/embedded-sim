@@ -33,4 +33,22 @@ typedef unsigned char U8;
 typedef unsigned short int U16;
 typedef unsigned int U32;
 
+typedef enum {
+  STRUCTURE_TYPE_PARSER_CREATE_INFO,
+  STRUCTURE_TYPE_PARSER_GET_INSTRUCTION_SET_INFO,
+  STRUCTURE_TYPE_PARSER_INVALID_TOKEN_OUTPUT_INFO,
+} StructureType;
+
+typedef struct {
+  StructureType structureType;
+  void const* pNext;
+} InStructure;
+
+typedef struct {
+  StructureType structureType;
+  void* pNext;
+} OutStructure;
+
+#define DEFINE_HANDLE(_handle) typedef struct _handle##_T* _handle
+
 #endif //TYPES_H
