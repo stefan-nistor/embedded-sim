@@ -263,7 +263,25 @@ mov r0, 10;
   MockCpuRegisterMap<> regMap{};
   ASSERT_EQ(instructions(mov(any(), 10)), parser.instructions(regMap.map()));
 }
+TEST(ParserTest, CommasDoNothing3) {
+  auto code = R"(
+mov r0 ,10;
+)";
 
+  ParserRAII parser{code};
+  MockCpuRegisterMap<> regMap{};
+  ASSERT_EQ(instructions(mov(any(), 10)), parser.instructions(regMap.map()));
+}
+
+TEST(ParserTest, CommasDoNothing4) {
+  auto code = R"(
+mov r0,10;
+)";
+
+  ParserRAII parser{code};
+  MockCpuRegisterMap<> regMap{};
+  ASSERT_EQ(instructions(mov(any(), 10)), parser.instructions(regMap.map()));
+}
 TEST(ParserTest, CreateParserWithInvalidArgsYieldsError) {
   ParserCreateInfo createInfo {
     .structureType = STRUCTURE_TYPE_PARSER_CREATE_INFO,
