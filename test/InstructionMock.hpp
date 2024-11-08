@@ -4,8 +4,11 @@
 
 #pragma once
 
+#include <bit>
 #include <iostream>
 #include <optional>
+#include <sstream>
+#include <type_traits>
 #include <variant>
 #include <vector>
 
@@ -13,12 +16,21 @@
 
 namespace testing::mock::detail {
 using std::apply;
+using std::bit_cast;
 using std::cout;
 using std::equal;
+using std::forward_as_tuple;
+using std::hex;
 using std::holds_alternative;
+using std::is_same_v;
 using std::optional;
 using std::nullopt;
 using std::nullptr_t;
+using std::remove_cvref_t;
+using std::size_t;
+using std::string;
+using std::stringstream;
+using std::to_string;
 using std::variant;
 using std::vector;
 
@@ -58,7 +70,7 @@ class ParameterMatcher {
 public:
   explicit ParameterMatcher(WithWildcard<ParameterMatcherTypes> const& param = Wildcard{}) :
       _param {std::visit([]<typename T>(T&& arg) -> optional<ParameterMatcherTypes> {
-        if constexpr (std::is_same_v<std::remove_cvref_t<T>, Wildcard>) {
+        if constexpr (is_same_v<remove_cvref_t<T>, Wildcard>) {
           return nullopt;
         } else {
           return arg;
@@ -93,15 +105,15 @@ public:
 
   [[nodiscard]] auto str() const {
     assert(_param && "Wildcard dump unexpected");
-    return std::visit([]<typename DT>(DT&& val) -> std::string {
-      using T = std::remove_cvref_t<DT>;
-      if constexpr(std::is_same_v<nullptr_t, T>) {
+    return std::visit([]<typename DT>(DT&& val) -> string {
+      using T = remove_cvref_t<DT>;
+      if constexpr(is_same_v<nullptr_t, T>) {
         return "null";
-      } else if constexpr(std::is_same_v<int, T>) {
-        return std::to_string(val);
-      } else if constexpr(std::is_same_v<Register const*, T>) {
-        std::stringstream oss;
-        oss << *val << " (" << "0x" << std::hex << std::bit_cast<std::size_t>(val) << ")";
+      } else if constexpr(is_same_v<int, T>) {
+        return to_string(val);
+      } else if constexpr(is_same_v<Register const*, T>) {
+        stringstream oss;
+        oss << *val << " (" << "0x" << hex << bit_cast<size_t>(val) << ")";
         return oss.str();
       } else {
         assert(false && "Unhandled ParameterMatcher str alternative");
@@ -186,7 +198,7 @@ auto any() {
 }
 
 template <typename... A> auto any(A&&... args) {
-  return std::forward_as_tuple(args...);
+  return forward_as_tuple(args...);
 }
 
 template <typename... A> auto instr(A&&... args) {
@@ -252,13 +264,13 @@ auto str(ParameterMatcher const& matcher) {
   return matcher.str();
 }
 
-auto str(Register const* r) -> std::string {
+auto str(Register const* r) -> string {
   if (!r) {
     return "null";
   }
 
-  std::stringstream oss;
-  oss << *r << " (0x" << std::hex << std::bit_cast<std::size_t>(r) << ")";
+  stringstream oss;
+  oss << *r << " (0x" << hex << bit_cast<size_t>(r) << ")";
   return oss.str();
 }
 

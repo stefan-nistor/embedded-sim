@@ -5,7 +5,6 @@
 #include <cassert>
 #include <functional>
 #include <filesystem>
-#include <format>
 #include <fstream>
 #include <memory>
 #include <numeric>
@@ -16,7 +15,6 @@
 #include <tuple>
 #include <utility>
 #include <unordered_map>
-#include <unordered_set>
 #include <variant>
 #include <vector>
 
@@ -35,7 +33,6 @@ using std::construct_at;
 using std::destroy_at;
 using std::exception;
 using std::exchange;
-using std::format;
 using std::holds_alternative;
 using std::getline;
 using std::fstream;
@@ -53,7 +50,6 @@ using std::string_view;
 using std::terminate;
 using std::tuple;
 using std::unordered_map;
-using std::unordered_set;
 using std::variant;
 using std::vector;
 
@@ -148,7 +144,7 @@ unordered_map<string_view, InstructionType> const iTypeMap {
     {"call",IPU_CALL},
     {"ret", IPU_RET},
     {"mov", MMU_MOV},
-    {"push",MMU_PUSH},
+    {"push", MMU_PUSH},
     {"pop", MMU_POP}
 };
 
@@ -177,10 +173,10 @@ auto instructionOpCount(InstructionType type) noexcept -> tuple<unsigned, unsign
     case IPU_CALL:
     case MMU_PUSH:
       return {1, 1};
-    case IPU_RET:
-      return {0, 0};
     case MMU_POP:
       return {0, 1};
+    case IPU_RET:
+      return {0, 0};
     default:
       assert(false && "Unhandled instruction type case");
       terminate();
@@ -188,7 +184,8 @@ auto instructionOpCount(InstructionType type) noexcept -> tuple<unsigned, unsign
 }
 
 auto op(string_view token) noexcept -> optional<InstructionType> {
-  if (auto const it = iTypeMap.find(token); it != iTypeMap.end()) {
+  if (auto const it = iTypeMap.find(token);
+      it != iTypeMap.end()) {
     return it->second;
   }
   return nullopt;
@@ -254,8 +251,8 @@ public:
     }
 
     assert(holds_alternative<Instr>(_encoded) && "Unexpected parametrized label");
-    auto& [t, p0, p1] = get<Instr>(_encoded);
-    auto const [minParamCount, maxParamCount] = instructionOpCount(t);
+    auto& [type, _0, _1] = get<Instr>(_encoded);
+    auto const [minParamCount, maxParamCount] = instructionOpCount(type);
     auto const paramCount = currentParameterCount();
     if (paramCount == maxParamCount) {
       return Full;
@@ -525,7 +522,7 @@ public:
     for (auto& encoded : _encodedInstructions) {
       encoded.visit(
           [](auto&&...) {},
-          [&jumpMap, this](auto const& label, unsigned instrRefIdx) {
+          [&jumpMap](auto const& label, unsigned instrRefIdx) {
             jumpMap.emplace(label, instrRefIdx);
           }
       );

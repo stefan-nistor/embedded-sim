@@ -9,20 +9,23 @@
 #include "InstructionMock.hpp"
 
 namespace {
+using std::exception;
 using std::ignore;
+using std::is_invocable_v;
+using std::string;
 using std::string_view;
 using std::vector;
 
 using namespace testing::mock;
 
-template <typename Fn, typename... Args> concept Callable = std::is_invocable_v<Fn, Args...>;
+template <typename Fn, typename... Args> concept Callable = is_invocable_v<Fn, Args...>;
 
-class ParserException : public std::exception {
+class ParserException : public exception {
 public:
   explicit ParserException(ParserError error) : _error{error} {}
-  ParserException(std::string token, unsigned instrIdx) :
+  ParserException(string token, unsigned instrIdx) :
       _token{std::move(token)}, _line{instrIdx} {}
-  ParserException(std::string token, unsigned line, unsigned column) :
+  ParserException(string token, unsigned line, unsigned column) :
       _token{std::move(token)}, _line{line}, _column{column} {}
 
   [[nodiscard]] auto error() const {
@@ -47,7 +50,7 @@ public:
 
 private:
   ParserError _error {PARSER_ERROR_NONE};
-  std::string _token;
+  string _token;
   unsigned _line {0};
   unsigned _column {0};
 };
@@ -59,7 +62,7 @@ public:
 
   [[nodiscard]] auto instructions(vector<ParserMappedRegister> const& mappedRegisters) const -> vector<Instruction> {
     U16 instructionCount;
-    std::string undefReferenceBuffer(128, '\0');
+    string undefReferenceBuffer(128, '\0');
     ParserUndefinedReferenceOutputInfo undefinedReferenceInfo {
       .structureType = STRUCTURE_TYPE_PARSER_UNDEFINED_REFERENCE_OUTPUT_INFO,
       .pNext = nullptr,
@@ -93,7 +96,7 @@ public:
 
 private:
   static auto create(string_view code) -> Parser {
-    std::string invalidTokenBuffer(128, '\0');
+    string invalidTokenBuffer(128, '\0');
     auto invalidTokenInfo = ParserInvalidTokenOutputInfo {
       .structureType = STRUCTURE_TYPE_PARSER_INVALID_TOKEN_OUTPUT_INFO,
       .pNext = nullptr,
@@ -650,4 +653,26 @@ mul r4, 3;
       sub(&regs[2], 0),
       mul(&regs[4], 3)
   ), parser.instructions(regMap.map()));
+}
+
+TEST(ParserTest, UndefinedReferenceWithoutOutputWorksAsExpected) {
+  Parser p;
+  ParserCreateInfo createInfo {
+      .structureType = STRUCTURE_TYPE_PARSER_CREATE_INFO,
+      .pNext = nullptr,
+      .inputType = PARSER_INPUT_TYPE_CODE,
+      .dataLength = 0,
+      .pData = R"(mov r0 r1; mov r1 r2; mov r2 r0;)"
+  };
+  MockCpuRegisterMap<> regMap{};
+  auto map = regMap.map();
+  ASSERT_EQ(PARSER_ERROR_NONE, createParser(&createInfo, &p));
+  ParserGetInstructionSetInfo getInfo {
+      .structureType = STRUCTURE_TYPE_PARSER_GET_INSTRUCTION_SET_INFO,
+      .pNext = nullptr,
+      .mappedRegisterCount = 0u,
+      .pMappedRegisters = nullptr
+  };
+  U16 iCount;
+  ASSERT_EQ(PARSER_ERROR_UNDEFINED_REFERENCE, getParserInstructionSet(p, &getInfo, &iCount, nullptr));
 }

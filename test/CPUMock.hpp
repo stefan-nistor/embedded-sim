@@ -17,6 +17,7 @@ using std::string;
 using std::string_view;
 using std::to_string;
 using std::vector;
+
 template <unsigned regCount = 8> class MockCpuRegisterMap {
 public:
   explicit MockCpuRegisterMap(string_view prefix = "r", unsigned startingOffset = 0) {
