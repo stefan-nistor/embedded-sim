@@ -200,6 +200,15 @@ auto sanitize(string_view sv) {
   if (sv.empty()) {
     return sv;
   }
+
+  if (sv.front() == ',') {
+    sv.remove_prefix(1);
+  }
+
+  if (sv.empty()) {
+    return sv;
+  }
+
   if (sv.back() == ';' || sv.back() == ',') {
     sv.remove_suffix(1);
   }
@@ -235,6 +244,14 @@ auto validateLabel(string_view token) {
 
   token.remove_suffix(1);
   return token;
+}
+
+auto replaceUnnecessary(string& str) {
+  for (auto& c : str) {
+    if (c == ',') {
+      c = ' ';
+    }
+  }
 }
 
 class EncodedInstruction {
@@ -461,6 +478,7 @@ public:
     while (getline(_code, line)) {
       ++lineIndex;
       tokenizer.newLine();
+      replaceUnnecessary(line);
       stringstream lineBuf{std::move(line)};
       revive(line);
       string token;
