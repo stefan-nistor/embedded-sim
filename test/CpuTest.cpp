@@ -29,8 +29,8 @@ TEST(CpuTest, raiseFLag) {
 
 TEST(CpuTest, setALU) {
   auto cpu = CPU_ctor();
-  Register flg = 0;
-  Register ovf = 0;
+  Register2 flg = 0;
+  Register2 ovf = 0;
   ALU alu = ALU_ctor(&flg, &ovf);
 
   CPU_setALU(cpu, alu);
@@ -40,20 +40,20 @@ TEST(CpuTest, setALU) {
 }
 
 TEST(CpuTest, executeALU) {
-  Register flg = 0;
-  Register ovf = 0;
+  Register2 flg = 0;
+  Register2 ovf = 0;
   auto alu = ALU_ctor(&flg, &ovf);
   auto cpu = CPU_ctor();
   CPU_setDataRegister(cpu, 0, 23);
   CPU_setDataRegister(cpu, 1, 6);
   auto p0 = CPU_getDataRegister(cpu, 0);
   auto p1 = CPU_getDataRegister(cpu, 1);
-  auto instr = Instruction_ctor3(ALU_ADD, &p0, &p1);
+  auto instr = Instruction_ctor3(ALU_ADD, createRegister(p0), createRegister(p1));
 
   CPU_setALU(cpu, alu);
   CPU_execute(cpu, instr);
 
-  ASSERT_EQ(29, p0);
+  ASSERT_EQ(29, *CPU_getDataRegister(cpu, 0));
 
   Instruction_dtor(instr);
   CPU_dtor(cpu);

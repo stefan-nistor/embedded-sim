@@ -6,8 +6,8 @@
 #include "model/Register.h"
 typedef struct Private_IPU {
 
-  Register *flagRegister;
-  Register* programCounter;
+  Register2 *flagRegister;
+  Register2 * programCounter;
   Instruction instructions[];
 
 

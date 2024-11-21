@@ -470,7 +470,7 @@ private:
 class CxxParser {
 public:
   explicit CxxParser(string&& code) : _code{std::move(code)} {
-    _possibleConstants.resize(numeric_limits<Register>::max());
+    _possibleConstants.resize(numeric_limits<Register2>::max());
     iota(_possibleConstants.begin(), _possibleConstants.end(), 0);
     Tokenizer tokenizer;
     string line;
@@ -549,12 +549,12 @@ public:
     for (auto&& encoded : std::move(_encodedInstructions)) {
       encoded.visit(
           [this, &jumpMap, &encoded](InstructionType type, optional<Parameter>&& p0, optional<Parameter>&& p1) {
-            auto paramVisitor = [this, &jumpMap, &encoded](optional<Parameter>&& p) -> Register* {
+            auto paramVisitor = [this, &jumpMap, &encoded](optional<Parameter>&& p) -> Register2 * {
               if (!p) {
                 return nullptr;
               }
 
-              return std::visit([this, &jumpMap, &regMap= get<2>(*_registerMap), &encoded]<typename DT>(DT&& val) -> Register* {
+              return std::visit([this, &jumpMap, &regMap= get<2>(*_registerMap), &encoded]<typename DT>(DT&& val) -> Register2 * {
                 using T = remove_cvref_t<DT>;
                 if constexpr (is_same_v<T, Reference>) {
                   if (auto jumpAt = jumpMap.find(val); jumpAt != jumpMap.end()) {
@@ -586,8 +586,8 @@ private:
   stringstream _code;
   vector<EncodedInstruction> _encodedInstructions;
   optional<vector<cxx::Instruction>> _cachedInstructions;
-  vector<Register> _possibleConstants;
-  optional<tuple<U16, ParserMappedRegister const*, unordered_map<string, Register*>>> _registerMap {nullopt};
+  vector<Register2> _possibleConstants;
+  optional<tuple<U16, ParserMappedRegister const*, unordered_map<string, Register2 *>>> _registerMap {nullopt};
 };
 } // namespace
 

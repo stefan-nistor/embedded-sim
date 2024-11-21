@@ -12,6 +12,8 @@ add_library(embedded_sim_lib STATIC
         src/proc/Ipu_private.c
         src/proc/Cpu.h
         src/proc/Cpu_private.c
+        src/model/parameter/Parameter.c
+        src/model/parameter/Parameter.h
 )
 
 add_executable(embedded_sim main.c)

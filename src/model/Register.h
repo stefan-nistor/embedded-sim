@@ -7,9 +7,9 @@
 
 #include <Types.h>
 
-typedef U16 Register;
+typedef U16 Register2;
 
-static inline bool Register_isSet(Register actual, Register expected) {
+static inline bool Register_isSet(Register2 actual, Register2 expected) {
   return (actual & expected) != 0;
 }
 
