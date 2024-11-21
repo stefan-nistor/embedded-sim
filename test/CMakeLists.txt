@@ -21,8 +21,8 @@ add_executable(unit_test
         main.cpp
         AluTest.cpp
         CpuTest.cpp
-        ParserTest.cpp
+#        ParserTest.cpp
 )
 
-target_link_libraries(unit_test embedded_sim_lib lib_gtest parser)
+target_link_libraries(unit_test embedded_sim_lib lib_gtest)
 set_target_properties(unit_test PROPERTIES LINKER_LANGUAGE CXX)

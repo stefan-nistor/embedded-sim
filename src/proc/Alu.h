@@ -8,7 +8,7 @@
 
 typedef struct Private_ALU * ALU;
 
-extern ALU ALU_ctor(Register*, Register*);
+extern ALU ALU_ctor(Register2 *, Register2 *);
 extern void ALU_dtor(ALU obj);
 extern void ALU_execute(ALU self, Instruction instruction);
 #endif //ALU_H

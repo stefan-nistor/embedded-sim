@@ -13,7 +13,7 @@
 #define CPU_DATA_REGISTRY_LIST_SIZE (8)
 
 ////////////////////////////
-///  FR = Flag Register  ///
+///  FR = Flag Register2  ///
 ////////////////////////////
 
 #define FR_OVERFLOW_FLAG   (0x0001)
@@ -28,6 +28,8 @@
 #define FR_BITMASK (FR_OVERFLOW_FLAG | FR_ZERO_FLAG | FR_DIV_ZERO_FLAG | FR_EQUAL_FLAG \
                     | FR_LESS_FLAG | FR_ILLEGAL_FLAG | FR_SEG_FLAG | FR_MULTISTATE_FLAG)
 
+#define ILLEGAL_OPERATION "Illegal operation."
+#define INVALID_INSTR "Invalid instruction type."
 
 typedef unsigned char U8;
 typedef unsigned short int U16;
@@ -49,6 +51,12 @@ typedef struct {
   StructureType structureType;
   void* pNext;
 } OutStructure;
+
+typedef enum {
+  PT_MEMORY_LOCATION,
+  PT_REGISTER,
+  PT_CONSTANT,
+} ParameterType;
 
 #define DEFINE_HANDLE(_handle) typedef struct _handle##_T* _handle
 

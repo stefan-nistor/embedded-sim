@@ -14,7 +14,7 @@ using std::exchange;
 
 class Instruction {
 public:
-  explicit Instruction(InstructionType type = DEFAULT, Register* r0 = nullptr, Register* r1 = nullptr) :
+  explicit Instruction(InstructionType type = DEFAULT, Register2 * r0 = nullptr, Register2 * r1 = nullptr) :
       _instr{Instruction_ctor3(type, r0, r1)} {
     assert(_instr && "Instruction constructor yielded null memory");
   }

@@ -3,8 +3,8 @@
 #include <proc/Cpu.h>
 
 typedef struct Private_CPU {
-  Register dataRegisters[CPU_DATA_REGISTRY_LIST_SIZE];
-  Register flagRegister;
+  Register2 dataRegisters[CPU_DATA_REGISTRY_LIST_SIZE];
+  Register2 flagRegister;
   ALU alu;
 } Private_CPU;
 
@@ -18,14 +18,14 @@ Private_CPU * CPU_ctor() {
   return cpu;
 }
 
-void CPU_setDataRegister(Private_CPU * self, U8 index, Register value) {
+void CPU_setDataRegister(Private_CPU * self, U8 index, Register2 value) {
   assert(index >= 0 && index <= CPU_DATA_REGISTRY_LIST_SIZE && "Index out of bounds.\n");
   self->dataRegisters[index] = value;
 }
 
-Register CPU_getDataRegister(Private_CPU * self, U8 index) {
+U16* CPU_getDataRegister(Private_CPU * self, U8 index) {
   assert(index >= 0 && index <= CPU_DATA_REGISTRY_LIST_SIZE && "Index out of bounds.\n");
-  return self->dataRegisters[index];
+  return &self->dataRegisters[index];
 }
 
 void CPU_dtor(Private_CPU * self) {
@@ -48,11 +48,11 @@ void CPU_raiseFlag(Private_CPU * self, U16 flag) {
   self->flagRegister |= flag;
 }
 
-Register CPU_getFlagRegister(Private_CPU * self) {
+Register2 CPU_getFlagRegister(Private_CPU * self) {
   return self->flagRegister;
 }
 
-Register * CPU_getDataRegisters(Private_CPU * self) {
+Register2 * CPU_getDataRegisters(Private_CPU * self) {
   return self->dataRegisters;
 }
 

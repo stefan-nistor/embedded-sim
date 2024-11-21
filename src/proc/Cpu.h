@@ -16,10 +16,10 @@ extern void CPU_dtor(CPU self);
 
 extern void CPU_setALU(CPU self, ALU alu);
 extern void CPU_execute(CPU self, Instruction);
-extern void CPU_setDataRegister(CPU self, U8 index, Register value);
-extern Register CPU_getDataRegister(CPU self, U8 index);
+extern void CPU_setDataRegister(CPU self, U8 index, Register2 value);
+extern U16* CPU_getDataRegister(CPU self, U8 index);
 extern void CPU_raiseFlag(CPU self, U16 flag);
-extern Register CPU_getFlagRegister(CPU self);
-extern Register * CPU_getDataRegisters(CPU self);
+extern Register2 CPU_getFlagRegister(CPU self);
+extern Register2 * CPU_getDataRegisters(CPU self);
 
 #endif // EMBEDDED_SIM_CPU_H
