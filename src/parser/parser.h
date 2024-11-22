@@ -34,7 +34,7 @@ typedef struct {
 typedef struct {
   U32 registerNameLength;
   char const* pRegisterName;
-  Register2 * pRegister;
+  U16* pRegister;
 } ParserMappedRegister;
 
 typedef struct {
