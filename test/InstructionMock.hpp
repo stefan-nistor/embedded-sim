@@ -50,7 +50,7 @@ enum class InstructionMatchResult {
   P1Mismatch,
 };
 
-using ParameterMatcherTypes = variant<int, nullptr_t, Register2 const*>;
+using ParameterMatcherTypes = variant<int, nullptr_t, U16 const*>;
 
 template <typename T> struct WithWildcardImpl;
 template <typename...Ts> struct WithWildcardImpl<variant<Ts...>> {
@@ -96,7 +96,7 @@ public:
       return ValueMismatch;
     }
 
-    if (holds_alternative<Register2 const*>(*_param) && getParameterRegister(param) != get<Register2 const*>(*_param)) {
+    if (holds_alternative<U16 const*>(*_param) && getParameterRegister(param) != get<U16 const*>(*_param)) {
       return RegisterMismatch;
     }
 
@@ -111,7 +111,7 @@ public:
         return "null";
       } else if constexpr(is_same_v<int, T>) {
         return to_string(val);
-      } else if constexpr(is_same_v<Register2 const*, T>) {
+      } else if constexpr(is_same_v<U16 const*, T>) {
         stringstream oss;
         oss << *val << " (" << "0x" << hex << bit_cast<size_t>(val) << ")";
         return oss.str();

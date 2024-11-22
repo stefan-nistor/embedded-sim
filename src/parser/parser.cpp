@@ -584,7 +584,7 @@ private:
   stringstream _code;
   vector<EncodedInstruction> _encodedInstructions;
   optional<vector<cxx::Instruction>> _cachedInstructions;
-  optional<tuple<U16, ParserMappedRegister const*, unordered_map<string, Register2 *>>> _registerMap {nullopt};
+  optional<tuple<U16, ParserMappedRegister const*, unordered_map<string, U16*>>> _registerMap {nullopt};
 };
 } // namespace
 
