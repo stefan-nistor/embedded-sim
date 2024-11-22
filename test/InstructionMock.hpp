@@ -77,7 +77,7 @@ public:
         }
       }, param)} {}
 
-  auto match(Register2 const* param) const noexcept {
+  auto match(Parameter param) const noexcept {
     using enum ParameterMatchResult;
     if (!_param) {
       return ParamEqual;
@@ -92,11 +92,11 @@ public:
     }
 
     assert(param && "Param should be not null at this point");
-    if (holds_alternative<int>(*_param) && *param != get<int>(*_param)) {
+    if (holds_alternative<int>(*_param) && getParameterValue(param) != get<int>(*_param)) {
       return ValueMismatch;
     }
 
-    if (holds_alternative<Register2 const*>(*_param) && param != get<Register2 const*>(*_param)) {
+    if (holds_alternative<Register2 const*>(*_param) && getParameterRegister(param) != get<Register2 const*>(*_param)) {
       return RegisterMismatch;
     }
 
@@ -264,13 +264,13 @@ auto str(ParameterMatcher const& matcher) {
   return matcher.str();
 }
 
-auto str(Register2 const* r) -> string {
-  if (!r) {
+auto str(Parameter param) -> string {
+  if (!param) {
     return "null";
   }
 
   stringstream oss;
-  oss << *r << " (0x" << hex << bit_cast<size_t>(r) << ")";
+  oss << getParameterValue(param) << " (0x" << hex << bit_cast<size_t>(getParameterRegister(param)) << ")";
   return oss.str();
 }
 

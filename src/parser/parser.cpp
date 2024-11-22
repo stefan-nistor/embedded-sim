@@ -57,8 +57,8 @@ namespace fs = std::filesystem;
 
 using Reference = string;
 using Constant = unsigned;
-using Parameter = variant<Reference, Constant>;
-using Instr = tuple<InstructionType, optional<Parameter>, optional<Parameter>>;
+using ParameterVariant = variant<Reference, Constant>;
+using Instr = tuple<InstructionType, optional<ParameterVariant>, optional<ParameterVariant>>;
 using Label = string;
 
 enum class FeedResult {
@@ -341,7 +341,7 @@ private:
     return Reference{sv};
   }
 
-  static auto makeParam(string_view sv) -> Parameter {
+  static auto makeParam(string_view sv) -> ParameterVariant {
     if ('0' <= sv[0] && sv[0] <= '9') {
       return makeConstantParam(sv);
     }
@@ -360,7 +360,7 @@ private:
     return 0;
   }
 
-  auto addParam(Parameter const& p) -> void {
+  auto addParam(ParameterVariant const& p) -> void {
     assert(holds_alternative<Instr>(_encoded) && "Invalid instruction encoding");
     auto& [_, p0, p1] = get<Instr>(_encoded);
     if (!p0) {
@@ -470,8 +470,6 @@ private:
 class CxxParser {
 public:
   explicit CxxParser(string&& code) : _code{std::move(code)} {
-    _possibleConstants.resize(numeric_limits<Register2>::max());
-    iota(_possibleConstants.begin(), _possibleConstants.end(), 0);
     Tokenizer tokenizer;
     string line;
     unsigned lineIndex = 0;
@@ -548,24 +546,24 @@ public:
 
     for (auto&& encoded : std::move(_encodedInstructions)) {
       encoded.visit(
-          [this, &jumpMap, &encoded](InstructionType type, optional<Parameter>&& p0, optional<Parameter>&& p1) {
-            auto paramVisitor = [this, &jumpMap, &encoded](optional<Parameter>&& p) -> Register2 * {
+          [this, &jumpMap, &encoded](InstructionType type, optional<ParameterVariant>&& p0, optional<ParameterVariant>&& p1) {
+            auto paramVisitor = [this, &jumpMap, &encoded](optional<ParameterVariant>&& p) -> Parameter {
               if (!p) {
                 return nullptr;
               }
 
-              return std::visit([this, &jumpMap, &regMap= get<2>(*_registerMap), &encoded]<typename DT>(DT&& val) -> Register2 * {
+              return std::visit([this, &jumpMap, &regMap= get<2>(*_registerMap), &encoded]<typename DT>(DT&& val) -> Parameter {
                 using T = remove_cvref_t<DT>;
                 if constexpr (is_same_v<T, Reference>) {
                   if (auto jumpAt = jumpMap.find(val); jumpAt != jumpMap.end()) {
-                    return _possibleConstants.data() + jumpAt->second;
-                  } else if (auto reg = regMap.find(val); reg != regMap.end()) {
-                    return reg->second;
-                  } else {
-                    throw UndefinedReferenceException(val, encoded);
+                    return createConstant(jumpAt->second);
                   }
+                  if (auto reg = regMap.find(val); reg != regMap.end()) {
+                    return createRegister(reg->second);;
+                  }
+                  throw UndefinedReferenceException(val, encoded);
                 } else if constexpr (std::is_same_v<T, Constant>) {
-                  return _possibleConstants.data() + val;
+                  return createConstant(val);
                 } else {
                   assert(false && "Unhandled Parameter type");
                   return nullptr;
@@ -586,7 +584,6 @@ private:
   stringstream _code;
   vector<EncodedInstruction> _encodedInstructions;
   optional<vector<cxx::Instruction>> _cachedInstructions;
-  vector<Register2> _possibleConstants;
   optional<tuple<U16, ParserMappedRegister const*, unordered_map<string, Register2 *>>> _registerMap {nullopt};
 };
 } // namespace

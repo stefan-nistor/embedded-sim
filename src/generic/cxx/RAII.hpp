@@ -8,14 +8,15 @@
 #include <utility>
 
 #include <model/Instruction.h>
+#include <model/parameter/Parameter.h>
 
 namespace cxx::detail {
 using std::exchange;
 
 class Instruction {
 public:
-  explicit Instruction(InstructionType type = DEFAULT, Register2 * r0 = nullptr, Register2 * r1 = nullptr) :
-      _instr{Instruction_ctor3(type, r0, r1)} {
+  explicit Instruction(InstructionType type = DEFAULT, Parameter p0 = nullptr, Parameter p1 = nullptr) :
+      _instr{Instruction_ctor3(type, p0, p1)} {
     assert(_instr && "Instruction constructor yielded null memory");
   }
 
