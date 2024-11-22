@@ -20,9 +20,11 @@ Private_Instruction *Instruction_ctor3(InstructionType type, Parameter p1, Param
 }
 
 void Instruction_dtor(Private_Instruction *self) {
-  destroyParameter(self->param1);
-  destroyParameter(self->param2);
-  free(self);
+  if (self) {
+    destroyParameter(self->param1);
+    destroyParameter(self->param2);
+    free(self);
+  }
 }
 
 InstructionType Instruction_getType(Private_Instruction *self) { return self->type; }

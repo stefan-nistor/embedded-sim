@@ -429,6 +429,7 @@ TEST(ParserTest, GetInstructionSetWithInvalidArgsYieldsError) {
   ASSERT_EQ(PARSER_ERROR_ILLEGAL_PARAMETER, getParserInstructionSet(nullptr, &getInfo, &iCount, ins));
   ASSERT_EQ(PARSER_ERROR_ILLEGAL_PARAMETER, getParserInstructionSet(p, nullptr, &iCount, ins));
   ASSERT_EQ(PARSER_ERROR_ILLEGAL_PARAMETER, getParserInstructionSet(p, &getInfo, nullptr, ins));
+  destroyParser(p);
 }
 
 TEST(ParserTest, GetInstructionSetWithSmallInstructionArrayYieldsError) {
@@ -453,6 +454,7 @@ TEST(ParserTest, GetInstructionSetWithSmallInstructionArrayYieldsError) {
   Instruction ins[2]; // < 3
   ASSERT_EQ(PARSER_ERROR_ARRAY_TOO_SMALL, getParserInstructionSet(p, &getInfo, &iCount, ins));
   ASSERT_EQ(3, iCount);
+  destroyParser(p);
 }
 
 TEST(ParserTest, GetInstructionSetWithNoBufferYieldsRequiredSize) {
@@ -476,6 +478,7 @@ TEST(ParserTest, GetInstructionSetWithNoBufferYieldsRequiredSize) {
   U16 iCount = 2;
   ASSERT_EQ(PARSER_ERROR_NONE, getParserInstructionSet(p, &getInfo, &iCount, nullptr));
   ASSERT_EQ(3, iCount);
+  destroyParser(p);
 }
 
 TEST(ParserTest, JumpParseIsRecognizedAndLabelIsIgnored) {
@@ -695,4 +698,5 @@ TEST(ParserTest, UndefinedReferenceWithoutOutputWorksAsExpected) {
   };
   U16 iCount;
   ASSERT_EQ(PARSER_ERROR_UNDEFINED_REFERENCE, getParserInstructionSet(p, &getInfo, &iCount, nullptr));
+  destroyParser(p);
 }
